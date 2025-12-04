@@ -1,5 +1,5 @@
 from aiogram import Router, F
-from aiogram.types import Message, ReplyKeyboardMarkup, KeyboardButton
+from aiogram.types import Message, CallbackQuery, ReplyKeyboardRemove
 from aiogram.fsm.context import FSMContext
 
 from states.order_states import OrderStates
@@ -10,36 +10,45 @@ from utils.order_message import create_order_message, send_order_to_manager
 
 router = Router()
 
-@router.message(F.text == "📸 ФОТОПЕЧАТЬ")
-async def photoprint_start(message: Message, state: FSMContext):
+# Обработчик фотопечати через callback
+@router.callback_query(F.data == "photoprint")
+async def photoprint_start(callback: CallbackQuery, state: FSMContext):
     await state.set_state(OrderStates.photo_format)
-    await state.update_data(Услуга="Фотопечать", previous_menu='main')
+    await state.update_data(service_type="Фотопечать", previous_menu='main')
     
     info_text = (
-        "📸 ФОТОПЕЧАТЬ\ n\n"
+        "📸 ФОТОПЕЧАТЬ\n\n"
         "ℹ️ Печать производится только на глянцевой бумаге\n\n"
         "Выберите формат бумаги:"
     )
     
-    await message.answer(info_text, reply_markup=get_photo_format_keyboard())
+    await callback.answer()
+    await callback.message.edit_text(info_text, reply_markup=get_photo_format_keyboard())
 
-@router.message(OrderStates.photo_format)
-async def photo_format_selected(message: Message, state: FSMContext):
-    await state.update_data(Формат=message.text)
+@router.callback_query(F.data.in_(["photo_10x15", "photo_15x21", "photo_21x30"]))
+async def photo_format_selected(callback: CallbackQuery, state: FSMContext):
+    format_map = {
+        "photo_10x15": "10×15",
+        "photo_15x21": "15×21",
+        "photo_21x30": "21×30"
+    }
+    await state.update_data(Формат=format_map[callback.data])
     await state.set_state(OrderStates.photo_print_type)
-    await message.answer(
+    await callback.answer()
+    await callback.message.edit_text(
         "Выберите тип печати фото:",
         reply_markup=get_photo_print_type_keyboard()
     )
 
-@router.message(OrderStates.photo_print_type)
-async def photo_print_type_selected(message: Message, state: FSMContext):
-    await state.update_data(Тип_печати=message.text)
+@router.callback_query(F.data.in_(["photo_with_margins", "photo_without_margins"]))
+async def photo_print_type_selected(callback: CallbackQuery, state: FSMContext):
+    type_map = {
+        "photo_with_margins": "С полями (изображение полностью, возможны белые поля)",
+        "photo_without_margins": "Без полей (изображение займёт всю площадь, возможна обрезка краёв)"
+    }
+    await state.update_data(Тип_печати=type_map[callback.data])
     await state.set_state(OrderStates.waiting_for_quantity)
-    await message.answer(
-        "Введите количество экземпляров:",
-        reply_markup=ReplyKeyboardMarkup(
-            keyboard=[[KeyboardButton(text="🏠 Главное меню")]],
-            resize_keyboard=True
-        )
+    await callback.answer()
+    await callback.message.edit_text(
+        "Введите количество экземпляров (только цифры):"
     )

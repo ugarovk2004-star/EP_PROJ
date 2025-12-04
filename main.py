@@ -1,8 +1,12 @@
+# main.py
 import asyncio
 import logging
 from aiogram import Bot, Dispatcher
 
 from config import BOT_TOKEN
+from middlewares.input_validation import InputValidationMiddleware
+
+# Импорт роутеров
 from handlers.common import router as common_router
 from handlers.copycenter import router as copycenter_router
 from handlers.polygraphy import router as polygraphy_router
@@ -13,13 +17,16 @@ from handlers.stamps import router as stamps_router
 from handlers.photoprint import router as photoprint_router
 from handlers.order_confirmation import router as order_confirmation_router
 
-# Настройка логирования
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 async def main():
     bot = Bot(token=BOT_TOKEN)
     dp = Dispatcher()
+    
+    # Регистрируем middleware
+    dp.update.outer_middleware(InputValidationMiddleware())
+
     
     # Регистрация всех роутеров
     dp.include_router(common_router)

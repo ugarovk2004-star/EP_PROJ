@@ -2,12 +2,24 @@ from aiogram import Router, F
 from aiogram.types import Message, FSInputFile, ReplyKeyboardMarkup, KeyboardButton, CallbackQuery, ReplyKeyboardRemove
 from aiogram.fsm.context import FSMContext
 from aiogram.filters import Command
+from datetime import datetime
+from config import RECIPIENT_ID
+
 
 from states.order_states import OrderStates
 from keyboards.main_menu import get_main_menu_keyboard
 from keyboards.copycenter import get_files_keyboard, get_comment_keyboard, get_order_confirmation_keyboard
-from utils.order_message import create_order_message, send_order_to_manager, create_order_summary  # <-- added
-from utils.user_store import get_user_info, set_user_info  # <-- new
+from utils.order_message import create_order_message, send_order_to_manager, create_order_summary
+from utils.user_store import get_user_info, set_user_info
+
+# Импортируем все клавиатуры
+# from keyboards.copycenter import *
+# from keyboards.polygraphy import *
+# from keyboards.packaging import *
+# from keyboards.interior import *
+# from keyboards.souvenirs import *
+# from keyboards.stamps import *
+# from keyboards.photoprint import *
 
 router = Router()
 
@@ -38,8 +50,6 @@ async def cmd_start(message: Message, state: FSMContext, bot):
             "Здравствуйте! Перед началом работы, пожалуйста, укажите вашу фамилию:"
         )
         
-
-
 
 # Регистрация — фамилия
 @router.message(OrderStates.registration_last_name)
@@ -82,12 +92,88 @@ async def registration_phone(message: Message, state: FSMContext):
         reply_markup=get_main_menu_keyboard()
     )
 
-@router.message(F.text == "🏠 Главное меню")
-async def main_menu(message: Message, state: FSMContext):
-    await state.clear()
-    # Убираем старую клавиатуру, затем показываем inline-меню
-    await message.answer("Идёт загрузка...", reply_markup=ReplyKeyboardRemove())
+# Обработчик подтверждения сообщений от клиентов
+@router.callback_query(F.data.in_(["confirm", "confirmed"]))
+async def handle_message_confirmation(callback: CallbackQuery):
+    from keyboards.order_message_buttons import get_confirmed_keyboard
+    
+    if callback.data == "confirm":
+        # Меняем кнопку на "Подтверждено" только в сообщении менеджера
+        await callback.message.edit_reply_markup(reply_markup=get_confirmed_keyboard())
+        # Отвечаем только менеджеру, клиент не получает уведомление
+        await callback.answer("Сообщение отмечено как обработанное ✅", show_alert=False)
+    elif callback.data == "confirmed":
+        # Если уже подтверждено, просто отвечаем менеджеру
+        await callback.answer("Сообщение уже обработано", show_alert=False)
+    
+    # Важно: не отправляем никаких сообщений клиенту
+
+# Обработчик кнопки "Написать менеджеру"
+@router.message(F.text == "💬 Написать менеджеру")
+async def write_to_manager(message: Message, state: FSMContext):
+    # Сохраняем состояние, что пользователь хочет написать менеджеру
+    await state.set_state(OrderStates.writing_to_manager)
     await message.answer(
+        "📝 Напишите ваше сообщение для менеджера. После отправки сообщения вы вернетесь в главное меню.",
+        reply_markup=ReplyKeyboardRemove()
+    )
+
+# Обработчик сообщения для менеджера
+@router.message(OrderStates.writing_to_manager)
+async def manager_message_received(message: Message, state: FSMContext):
+    # Получаем информацию о пользователе
+    user = get_user_info(message.from_user.id)
+    
+    # Формируем сообщение для менеджера
+    user_info = f"📩 СООБЩЕНИЕ ОТ КЛИЕНТА\n\n"
+    user_info += f"👤 Пользователь: {user['first_name']} {user['last_name']} (@{message.from_user.username or 'нет username'})\n"
+    user_info += f"🆔 ID: {message.from_user.id}\n"
+    user_info += f"📞 Телефон: {user['phone']}\n"
+    user_info += f"🕒 Время: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
+    user_info += f"💬 Сообщение:\n{message.text}"
+    
+    # Импортируем клавиатуру для подтверждения
+    from keyboards.order_message_buttons import get_confirm_keyboard
+    
+    # Отправляем сообщение менеджеру с кнопкой подтверждения
+    try:
+        await message.bot.send_message(
+            chat_id=RECIPIENT_ID,
+            text=user_info,
+            reply_markup=get_confirm_keyboard()
+        )
+        success = True
+    except Exception as e:
+        print(f"Ошибка отправки сообщения менеджеру: {e}")
+        success = False
+    
+    # Очищаем состояние
+    await state.clear()
+    
+    # Возвращаем в главное меню
+    if success:
+        await message.answer(
+            "✅ Ваше сообщение отправлено менеджеру. Он свяжется с вами в ближайшее время.\n\n"
+            "Возвращаю вас в главное меню...",
+            reply_markup=ReplyKeyboardRemove()
+        )
+    else:
+        await message.answer(
+            "❌ Произошла ошибка при отправке сообщения. Пожалуйста, попробуйте позже.\n\n"
+            "Возвращаю вас в главное меню...",
+            reply_markup=ReplyKeyboardRemove()
+        )
+    
+    await message.answer(
+        "Главное меню:",
+        reply_markup=get_main_menu_keyboard()
+    )
+
+@router.callback_query(F.data == "main_menu")
+async def main_menu_inline(callback: CallbackQuery, state: FSMContext):
+    await state.clear()
+    await callback.answer()
+    await callback.message.edit_text(
         "Главное меню:",
         reply_markup=get_main_menu_keyboard()
     )
@@ -100,16 +186,6 @@ async def quantity_entered(message: Message, state: FSMContext):
         "Теперь прикрепите файлы:",
         reply_markup=get_files_keyboard()
     )
-
-# @router.message(OrderStates.waiting_for_files, F.text == "📎 Прикрепить файлы")
-# async def request_files(message: Message, state: FSMContext):
-#     await message.answer(
-#         "Пожалуйста, прикрепите файлы (документы или изображения):",
-#         reply_markup=ReplyKeyboardMarkup(
-#             keyboard=[[KeyboardButton(text="🏠 Главное меню")]],
-#             resize_keyboard=True
-#         )
-#     )
 
 @router.message(OrderStates.waiting_for_files, F.document | F.photo)
 async def files_received(message: Message, state: FSMContext):
@@ -165,7 +241,7 @@ async def request_comment(message: Message, state: FSMContext):
     )
 
 # ИСПРАВЛЕНИЕ: Добавить фильтр чтобы не срабатывал на кнопки
-@router.message(OrderStates.waiting_for_comment, ~F.text.in_(["Пропустить", "🏠 Главное меню", "✅ Отправить заказ-подтверждение"]))
+@router.message(OrderStates.waiting_for_comment, ~F.text.in_(["Пропустить", "🏠 Главное меню", "✅ Отправить заказ-подтверждение", "💬 Написать менеджеру"]))
 async def comment_received(message: Message, state: FSMContext):
 	await state.update_data(comment=message.text)
 	
@@ -190,60 +266,42 @@ async def skip_comment(message: Message, state: FSMContext):
 	# Краткая сводка
 	summary = create_order_summary(message.from_user.id, service_type, data, files_info=data.get('files_info', []), comment=data.get('comment'))
 
-	await message.answer(
+	await message.edit_text(
 		f"Заказ готов к отправке!\n\n"
 		f"Проверьте детали заказа и нажмите кнопку для отправки менеджеру:\n\n{summary}",
 		reply_markup=get_order_confirmation_keyboard()
 	)
 
-@router.message(F.text == "✅ Отправить заказ-подтверждение")
-async def confirm_order(message: Message, state: FSMContext):
+# Исправленный обработчик confirm_order_inline
+@router.callback_query(F.data == "send_order")
+async def confirm_order_inline(callback: CallbackQuery, state: FSMContext):
     data = await state.get_data()
+    user_info = get_user_info(callback.from_user.id) or {}
     
     order_message = create_order_message(
-        username=message.from_user.username,
-        user_id=message.from_user.id,
+        username=callback.from_user.username,
+        user_id=callback.from_user.id,
+        # Исправлено: убраны лишние параметры
         service_type=data.get('service_type', 'Неизвестная услуга'),
         order_data=data,
         files_info=data.get('files_info', []),
         comment=data.get('comment')
     )
     
-    # Отправляем менеджеру (если есть файлы, передаём их)
-    success = await send_order_to_manager(
-        message.bot, 
-        order_message, 
-        data.get('files_data', [])
-    )
+    # Отправляем менеджеру
+    success = await send_order_to_manager(callback.bot, order_message, data.get('files_data', []))
     
-    # Перед показом главного меню убираем ReplyKeyboardMarkup
-    await message.answer("Идёт загрузка...", reply_markup=ReplyKeyboardRemove())
+    await callback.answer()
+    # await callback.message.edit_text("Идёт загрузка...", reply_markup=ReplyKeyboardRemove())
     
     if success:
-        # Сохраняем ID пользователя
-        user_id = message.from_user.id
-        
-        # Отправляем сообщение с клавиатурой главного меню
-        sent_message = await message.answer(
+        await callback.message.edit_text(
             "✅ Ваш заказ успешно отправлен менеджеру!\n"
             "Ожидайте уведомления о принятии заказа в работу...\n",
             reply_markup=get_main_menu_keyboard()
         )
-        
-        # Сохраняем ID сообщения для последующего удаления
-        # Используем глобальное хранилище или временное решение
-        from utils.user_store import set_user_info, get_user_info
-        user_data = get_user_info(user_id) or {}
-        user_data["last_confirmation_message_id"] = sent_message.message_id
-        # Сохраняем обратно в user_store
-        set_user_info(user_id, 
-                     user_data.get("last_name", ""), 
-                     user_data.get("first_name", ""), 
-                     user_data.get("phone", ""),
-                     extra_data=user_data)  # Нужно будет обновить функцию set_user_info
-        
     else:
-        await message.answer(
+        await callback.message.edit_text(
             "❌ Произошла ошибка при отправке заказа. Пожалуйста, попробуйте позже.",
             reply_markup=get_main_menu_keyboard()
         )
@@ -257,7 +315,7 @@ async def handle_copycenter(callback: CallbackQuery, state: FSMContext):
 	await state.set_state(OrderStates.waiting_for_files)
 	await state.update_data(previous_menu='main')
 	await callback.answer()
-	await callback.message.answer(
+	await callback.message.edit_text(
 		"Раздел КОПИЦЕНТР. Выберите тип печати:",
 		reply_markup=get_copycenter_main_keyboard()
 	)
@@ -268,7 +326,7 @@ async def handle_polygraphy(callback: CallbackQuery, state: FSMContext):
 	await state.set_state(OrderStates.waiting_for_files)
 	await state.update_data(previous_menu='main')
 	await callback.answer()
-	await callback.message.answer(
+	await callback.message.edit_text(
 		"Раздел ПОЛИГРАФИЯ. Выберите продукт:",
 		reply_markup=get_polygraphy_main_keyboard()
 	)
@@ -279,7 +337,7 @@ async def handle_packaging(callback: CallbackQuery, state: FSMContext):
 	await state.set_state(OrderStates.waiting_for_files)
 	await state.update_data(previous_menu='main')
 	await callback.answer()
-	await callback.message.answer(
+	await callback.message.edit_text(
 		"Раздел УПАКОВКА. Выберите продукт:",
 		reply_markup=get_packaging_main_keyboard()
 	)
@@ -290,7 +348,7 @@ async def handle_interior(callback: CallbackQuery, state: FSMContext):
 	await state.set_state(OrderStates.waiting_for_files)
 	await state.update_data(previous_menu='main')
 	await callback.answer()
-	await callback.message.answer(
+	await callback.message.edit_text(
 		"Раздел ИНТЕРЬЕРНАЯ ПЕЧАТЬ. Выберите продукт:",
 		reply_markup=get_interior_main_keyboard()
 	)
@@ -301,7 +359,7 @@ async def handle_souvenirs(callback: CallbackQuery, state: FSMContext):
 	await state.set_state(OrderStates.waiting_for_files)
 	await state.update_data(previous_menu='main')
 	await callback.answer()
-	await callback.message.answer(
+	await callback.message.edit_text(
 		"Раздел СУВЕНИРЫ. Выберите продукт:",
 		reply_markup=get_souvenirs_main_keyboard()
 	)
@@ -312,7 +370,7 @@ async def handle_stamps(callback: CallbackQuery, state: FSMContext):
 	await state.set_state(OrderStates.stamp_type)
 	await state.update_data(service_type="Изготовление печатей и штампов", previous_menu='main')
 	await callback.answer()
-	await callback.message.answer(
+	await callback.message.edit_text(
 		"🖋️ ИЗГОТОВЛЕНИЕ ПЕЧАТЕЙ И ШТАМПОВ\n\nВыберите тип печати:",
 		reply_markup=get_stamps_main_keyboard()
 	)
@@ -323,7 +381,7 @@ async def handle_photoprint(callback: CallbackQuery, state: FSMContext):
 	await state.set_state(OrderStates.photo_format)
 	await state.update_data(service_type="Фотопечать", previous_menu='main')
 	await callback.answer()
-	await callback.message.answer(
+	await callback.message.edit_text(
 		"📸 ФОТОПЕЧАТЬ\n\nℹ️ Печать производится только на глянцевой бумаге\n\nВыберите формат бумаги:",
 		reply_markup=get_photo_format_keyboard()
 	)

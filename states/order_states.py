@@ -182,6 +182,10 @@ class OrderStates(StatesGroup):
     catalog_inner_block = State()
     catalog_inner_print = State()
 
+    waiting_for_quantity = State()
+    writing_to_manager = State()
+    waiting_for_comment_text = State()
+
 # Добавить в конец файла states/order_states.py
 
 @router.message(OrderStates.waiting_for_quantity, F.text.regexp(r'^\d+$'))

@@ -5,17 +5,6 @@
     "phone": "79935054310",
     "last_confirmation_message_id": 3109
   },
-  "5551502763": {
-    "last_name": "Бабор",
-    "first_name": "Шакал",
-    "phone": "79956754903"
-  },
-  "1312396884": {
-    "last_name": "Угаров",
-    "first_name": "Константин",
-    "phone": "+79049869765",
-    "last_confirmation_message_id": 3191
-  },
   "5179518642": {
     "last_name": "Золотухина",
     "first_name": "Анастасия",
@@ -30,5 +19,15 @@
     "last_name": "Варов",
     "first_name": "Никита",
     "phone": "79530554310"
+  },
+  "1312396884": {
+    "last_name": "Угаров",
+    "first_name": "Константин",
+    "phone": "89049869765"
+  },
+  "5551502763": {
+    "last_name": "Баобаб",
+    "first_name": "Владим",
+    "phone": "79956754903"
   }
 }

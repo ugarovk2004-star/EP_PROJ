@@ -10,136 +10,186 @@ from utils.order_message import create_order_message, send_order_to_manager
 
 router = Router()
 
-# Главное меню упаковки
-@router.message(F.text == "📦 УПАКОВКА")
-async def packaging_main(message: Message, state: FSMContext):
+# Обработчик главного меню упаковки через callback
+@router.callback_query(F.data == "packaging")
+async def packaging_main(callback: CallbackQuery, state: FSMContext):
     await state.set_state(OrderStates.waiting_for_files)
     await state.update_data(previous_menu='main')
-    await message.answer(
+    await callback.answer()
+    await callback.message.edit_text(
         "Раздел УПАКОВКА. Выберите продукт:",
         reply_markup=get_packaging_main_keyboard()
     )
 
 # ПАКЕТЫ БУМАЖНЫЕ
-@router.message(F.text == "ПАКЕТЫ")
-async def bags_start(message: Message, state: FSMContext):
+@router.callback_query(F.data == "packaging_bags")
+async def bags_start(callback: CallbackQuery, state: FSMContext):
     await state.set_state(OrderStates.bag_type)
-    await state.update_data(Услуга="Пакеты", previous_menu='packaging')
-    await message.answer(
+    await state.update_data(service_type="Пакеты", previous_menu='packaging')
+    await callback.answer()
+    await callback.message.edit_text(
         "🛍️ ПАКЕТЫ\n\nВыберите тип пакета:",
         reply_markup=get_bag_type_keyboard()
     )
 
 # Обработчики бумажных пакетов
-@router.message(OrderStates.bag_type, F.text == "Бумажные пакеты")
-async def paper_bags_selected(message: Message, state: FSMContext):
-    await state.update_data(Услуга=message.text)
+@router.callback_query(F.data == "bag_paper")
+async def paper_bags_selected(callback: CallbackQuery, state: FSMContext):
+    await state.update_data(Тип_пакета="Бумажные пакеты")
     await state.set_state(OrderStates.bag_paper_print)
-    await message.answer(
+    await callback.answer()
+    await callback.message.edit_text(
         "Выберите тип печати:",
         reply_markup=get_bag_paper_print_keyboard()
     )
 
-@router.message(OrderStates.bag_paper_print)
-async def paper_bags_print_selected(message: Message, state: FSMContext):
-    await state.update_data(Тип_печати=message.text)
+@router.callback_query(F.data.in_(["bag_paper_print_one_side", "bag_paper_print_two_sides_same", "bag_paper_print_two_sides_different"]))
+async def paper_bags_print_selected(callback: CallbackQuery, state: FSMContext):
+    print_map = {
+        "bag_paper_print_one_side": "Печать с одной стороны пакета",
+        "bag_paper_print_two_sides_same": "Печать с 2 сторон с одного макета",
+        "bag_paper_print_two_sides_different": "Печать с 2 сторон разные макеты"
+    }
+    await state.update_data(Тип_печати=print_map[callback.data])
     await state.set_state(OrderStates.bag_paper_format)
-    await message.answer(
+    await callback.answer()
+    await callback.message.edit_text(
         "Выберите формат пакета:",
         reply_markup=get_bag_paper_format_keyboard()
     )
 
-@router.message(OrderStates.bag_paper_format)
-async def paper_bags_format_selected(message: Message, state: FSMContext):
-    await state.update_data(Формат=message.text)
+@router.callback_query(F.data.in_(["bag_paper_220x330x70", "bag_paper_195x320x90", "bag_paper_100x330x100",
+                                 "bag_paper_170x220x70", "bag_paper_70x330x70", "bag_paper_130x220x70",
+                                 "bag_paper_120x140x70", "bag_paper_210x210x100", "bag_paper_210x210x80",
+                                 "bag_paper_330x220x70"]))
+async def paper_bags_format_selected(callback: CallbackQuery, state: FSMContext):
+    format_map = {
+        "bag_paper_220x330x70": "220×330×70 мм",
+        "bag_paper_195x320x90": "195×320×90 мм",
+        "bag_paper_100x330x100": "100×330×100 мм",
+        "bag_paper_170x220x70": "170×220×70 мм",
+        "bag_paper_70x330x70": "70×330×70 мм",
+        "bag_paper_130x220x70": "130×220×70 мм",
+        "bag_paper_120x140x70": "120×140×70 мм",
+        "bag_paper_210x210x100": "210×210×100 мм",
+        "bag_paper_210x210x80": "210×210×80 мм",
+        "bag_paper_330x220x70": "330×220×70 мм"
+    }
+    await state.update_data(Формат=format_map[callback.data])
     await state.set_state(OrderStates.bag_paper_lamination)
-    await message.answer(
+    await callback.answer()
+    await callback.message.edit_text(
         "Выберите ламинированное покрытие:",
         reply_markup=get_bag_paper_lamination_keyboard()
     )
 
-@router.message(OrderStates.bag_paper_lamination)
-async def paper_bags_lamination_selected(message: Message, state: FSMContext):
-    await state.update_data(Ламинация=message.text)
+@router.callback_query(F.data.in_(["bag_paper_matte", "bag_paper_glossy"]))
+async def paper_bags_lamination_selected(callback: CallbackQuery, state: FSMContext):
+    lamination_map = {
+        "bag_paper_matte": "Матовое",
+        "bag_paper_glossy": "Глянцевое"
+    }
+    await state.update_data(Ламинация=lamination_map[callback.data])
     await state.set_state(OrderStates.bag_paper_grommets)
-    await message.answer(
+    await callback.answer()
+    await callback.message.edit_text(
         "Выберите люверсы:",
         reply_markup=get_bag_paper_grommets_keyboard()
     )
 
-@router.message(OrderStates.bag_paper_grommets)
-async def paper_bags_grommets_selected(message: Message, state: FSMContext):
-    await state.update_data(Люверсы=message.text)
+@router.callback_query(F.data.in_(["bag_paper_grommets_gold", "bag_paper_grommets_silver"]))
+async def paper_bags_grommets_selected(callback: CallbackQuery, state: FSMContext):
+    grommets_map = {
+        "bag_paper_grommets_gold": "Золото",
+        "bag_paper_grommets_silver": "Серебро"
+    }
+    await state.update_data(Люверсы=grommets_map[callback.data])
     await state.set_state(OrderStates.bag_paper_handle)
-    await message.answer(
+    await callback.answer()
+    await callback.message.edit_text(
         "Выберите ручку-шнурок:",
         reply_markup=get_bag_paper_handle_keyboard()
     )
 
-@router.message(OrderStates.bag_paper_handle)
-async def paper_bags_handle_selected(message: Message, state: FSMContext):
-    await state.update_data(Ручка=message.text)
+@router.callback_query(F.data.in_(["bag_paper_handle_white", "bag_paper_handle_black", "bag_paper_handle_red",
+                                 "bag_paper_handle_blue", "bag_paper_handle_green", "bag_paper_handle_yellow"]))
+async def paper_bags_handle_selected(callback: CallbackQuery, state: FSMContext):
+    handle_map = {
+        "bag_paper_handle_white": "Белые",
+        "bag_paper_handle_black": "Чёрные",
+        "bag_paper_handle_red": "Красные",
+        "bag_paper_handle_blue": "Синие",
+        "bag_paper_handle_green": "Зелёные",
+        "bag_paper_handle_yellow": "Жёлтые"
+    }
+    await state.update_data(Ручка=handle_map[callback.data])
     await state.set_state(OrderStates.waiting_for_quantity)
-    await message.answer(
-        "Введите количество экземпляров:",
-        reply_markup=ReplyKeyboardMarkup(
-            keyboard=[[KeyboardButton(text="🏠 Главное меню")]],
-            resize_keyboard=True
-        )
+    await callback.answer()
+    await callback.message.edit_text(
+        "Введите количество экземпляров (только цифры):"
     )
 
 # Обработчики ПВД пакетов
-@router.message(OrderStates.bag_type, F.text == "ПВД пакеты")
-async def pvd_bags_selected(message: Message, state: FSMContext):
-    await state.update_data(Услуга=message.text)
+@router.callback_query(F.data == "bag_pvd")
+async def pvd_bags_selected(callback: CallbackQuery, state: FSMContext):
+    await state.update_data(Тип_пакета="ПВД пакеты")
     await state.set_state(OrderStates.bag_pvd_print)
-    await message.answer(
+    await callback.answer()
+    await callback.message.edit_text(
         "Выберите печать:",
         reply_markup=get_bag_pvd_print_keyboard()
     )
 
-@router.message(OrderStates.bag_pvd_print)
-async def pvd_bags_print_selected(message: Message, state: FSMContext):
-    await state.update_data(Тип_печати=message.text)
+@router.callback_query(F.data.in_(["bag_pvd_print_1_0", "bag_pvd_print_1_1", "bag_pvd_print_2_0", "bag_pvd_print_2_2"]))
+async def pvd_bags_print_selected(callback: CallbackQuery, state: FSMContext):
+    print_map = {
+        "bag_pvd_print_1_0": "1+0",
+        "bag_pvd_print_1_1": "1+1",
+        "bag_pvd_print_2_0": "2+0",
+        "bag_pvd_print_2_2": "2+2"
+    }
+    await state.update_data(Тип_печати=print_map[callback.data])
     await state.set_state(OrderStates.bag_pvd_format)
-    await message.answer(
+    await callback.answer()
+    await callback.message.edit_text(
         "Выберите формат:",
         reply_markup=get_bag_pvd_format_keyboard()
     )
 
-@router.message(OrderStates.bag_pvd_format)
-async def pvd_bags_format_selected(message: Message, state: FSMContext):
-    await state.update_data(Формат=message.text)
+@router.callback_query(F.data.in_(["bag_pvd_20x30", "bag_pvd_30x40", "bag_pvd_40x50", "bag_pvd_50x60"]))
+async def pvd_bags_format_selected(callback: CallbackQuery, state: FSMContext):
+    format_map = {
+        "bag_pvd_20x30": "20×30 см",
+        "bag_pvd_30x40": "30×40 см",
+        "bag_pvd_40x50": "40×50 см",
+        "bag_pvd_50x60": "50×60 см"
+    }
+    await state.update_data(Формат=format_map[callback.data])
     await state.set_state(OrderStates.waiting_for_quantity)
-    await message.answer(
-        "Введите количество экземпляров:",
-        reply_markup=ReplyKeyboardMarkup(
-            keyboard=[[KeyboardButton(text="🏠 Главное меню")]],
-            resize_keyboard=True
-        )
+    await callback.answer()
+    await callback.message.edit_text(
+        "Введите количество экземпляров (только цифры):"
     )
 
 # КОРОБКИ
-@router.message(F.text == "КОРОБКИ")
-async def boxes_start(message: Message, state: FSMContext):
+@router.callback_query(F.data == "packaging_boxes")
+async def boxes_start(callback: CallbackQuery, state: FSMContext):
     await state.set_state(OrderStates.box_material)
-    await state.update_data(Услуга="Коробки", previous_menu='packaging')
-    await message.answer(
+    await state.update_data(service_type="Коробки", previous_menu='packaging')
+    await callback.answer()
+    await callback.message.edit_text(
         "📦 КОРОБКИ\n\nВыберите материал коробки:",
         reply_markup=get_box_material_keyboard()
     )
 
 # Обработчики коробок из мелованного картона
-@router.message(OrderStates.box_material, F.text == "Коробки из мелованного картона")
-async def cardboard_boxes_selected(message: Message, state: FSMContext):
-    await state.update_data(Материал=message.text)
+@router.callback_query(F.data == "box_cardboard")
+async def cardboard_boxes_selected(callback: CallbackQuery, state: FSMContext):
+    await state.update_data(Материал="Коробки из мелованного картона")
     await state.set_state(OrderStates.box_cardboard_size)
-    await message.answer(
-        "Введите размеры коробки в формате Д×Ш×В (мм):",
-        reply_markup=ReplyKeyboardMarkup(
-            keyboard=[[KeyboardButton(text="🏠 Главное меню")]],
-            resize_keyboard=True
-        )
+    await callback.answer()
+    await callback.message.edit_text(
+        "Введите размеры коробки в формате Д×Ш×В (мм):"
     )
 
 @router.message(OrderStates.box_cardboard_size)
@@ -151,94 +201,88 @@ async def cardboard_boxes_size_entered(message: Message, state: FSMContext):
         reply_markup=get_box_cardboard_print_keyboard()
     )
 
-@router.message(OrderStates.box_cardboard_print)
-async def cardboard_boxes_print_selected(message: Message, state: FSMContext):
-    await state.update_data(Печать=message.text)
+@router.callback_query(F.data.in_(["box_cardboard_no_print", "box_cardboard_full_color"]))
+async def cardboard_boxes_print_selected(callback: CallbackQuery, state: FSMContext):
+    print_map = {
+        "box_cardboard_no_print": "Без печати",
+        "box_cardboard_full_color": "Полноцветная печать"
+    }
+    await state.update_data(Печать=print_map[callback.data])
     await state.set_state(OrderStates.box_cardboard_lamination)
-    await message.answer(
+    await callback.answer()
+    await callback.message.edit_text(
         "Выберите ламинированное покрытие:",
         reply_markup=get_bag_paper_lamination_keyboard()  # Та же клавиатура
     )
 
-@router.message(OrderStates.box_cardboard_lamination)
-async def cardboard_boxes_lamination_selected(message: Message, state: FSMContext):
-    await state.update_data(Ламинирование=message.text)
+@router.callback_query(F.data.in_(["bag_paper_matte", "bag_paper_glossy"]))
+async def cardboard_boxes_lamination_selected(callback: CallbackQuery, state: FSMContext):
+    lamination_map = {
+        "bag_paper_matte": "Матовое",
+        "bag_paper_glossy": "Глянцевое"
+    }
+    await state.update_data(Ламинирование=lamination_map[callback.data])
     await state.set_state(OrderStates.waiting_for_quantity)
-    await message.answer(
-        "Введите количество экземпляров:",
-        reply_markup=ReplyKeyboardMarkup(
-            keyboard=[[KeyboardButton(text="🏠 Главное меню")]],
-            resize_keyboard=True
-        )
+    await callback.answer()
+    await callback.message.edit_text(
+        "Введите количество экземпляров (только цифры):"
     )
 
 # Обработчики коробок из микро-гофры
-@router.message(OrderStates.box_material, F.text == "Коробки из микро-гофры")
-async def corrugated_boxes_selected(message: Message, state: FSMContext):
-    await state.update_data(Материал=message.text)
+@router.callback_query(F.data == "box_corrugated")
+async def corrugated_boxes_selected(callback: CallbackQuery, state: FSMContext):
+    await state.update_data(Материал="Коробки из микро-гофры")
     await state.set_state(OrderStates.box_corrugated_format)
-    await message.answer(
+    await callback.answer()
+    await callback.message.edit_text(
         "Выберите формат коробки:",
         reply_markup=get_box_corrugated_format_keyboard()
     )
 
-@router.message(OrderStates.box_corrugated_format)
-async def corrugated_boxes_format_selected(message: Message, state: FSMContext):
-    await state.update_data(Формат=message.text)
+@router.callback_query(F.data.in_(["box_corrugated_95x55x90", "box_corrugated_115x95x65", "box_corrugated_180x55x55",
+                                 "box_corrugated_360x150x50", "box_corrugated_415x160x60", "box_corrugated_200x200x10",
+                                 "box_corrugated_custom"]))
+async def corrugated_boxes_format_selected(callback: CallbackQuery, state: FSMContext):
+    format_map = {
+        "box_corrugated_95x55x90": "95×55×90 мм",
+        "box_corrugated_115x95x65": "115×95×65 мм",
+        "box_corrugated_180x55x55": "180×55×55 мм",
+        "box_corrugated_360x150x50": "360×150×50 мм",
+        "box_corrugated_415x160x60": "415×160×60 мм",
+        "box_corrugated_200x200x10": "200×200×10 мм",
+        "box_corrugated_custom": "Индивидуальный размер"
+    }
+    await state.update_data(Формат=format_map[callback.data])
     await state.set_state(OrderStates.box_corrugated_color)
-    await message.answer(
+    await callback.answer()
+    await callback.message.edit_text(
         "Выберите цвет микрогофры:",
         reply_markup=get_box_corrugated_color_keyboard()
     )
 
-@router.message(OrderStates.box_corrugated_color)
-async def corrugated_boxes_color_selected(message: Message, state: FSMContext):
-    await state.update_data(Цвет=message.text)
+@router.callback_query(F.data.in_(["box_corrugated_white", "box_corrugated_brown"]))
+async def corrugated_boxes_color_selected(callback: CallbackQuery, state: FSMContext):
+    color_map = {
+        "box_corrugated_white": "Белый",
+        "box_corrugated_brown": "Коричневый"
+    }
+    await state.update_data(Цвет=color_map[callback.data])
     await state.set_state(OrderStates.box_corrugated_logo)
-    await message.answer(
+    await callback.answer()
+    await callback.message.edit_text(
         "Выберите нанесение логотипа:",
         reply_markup=get_box_corrugated_logo_keyboard()
     )
 
-@router.message(OrderStates.box_corrugated_logo)
-async def corrugated_boxes_logo_selected(message: Message, state: FSMContext):
-    await state.update_data(Логотип=message.text)
+@router.callback_query(F.data.in_(["box_corrugated_no_logo", "box_corrugated_with_logo"]))
+async def corrugated_boxes_logo_selected(callback: CallbackQuery, state: FSMContext):
+    logo_map = {
+        "box_corrugated_no_logo": "Без нанесения",
+        "box_corrugated_with_logo": "С нанесением"
+    }
+    await state.update_data(Логотип=logo_map[callback.data])
     await state.set_state(OrderStates.waiting_for_quantity)
-    await message.answer(
-        "Введите количество экземпляров:",
-        reply_markup=ReplyKeyboardMarkup(
-            keyboard=[[KeyboardButton(text="🏠 Главное меню")]],
-            resize_keyboard=True
-        )
-    )
-
-@router.callback_query(F.data == "confirm_order")
-async def confirm_order(callback: CallbackQuery, state: FSMContext):
-    data = await state.get_data()
-    order_message = create_order_message(
-        username=callback.from_user.username,
-        user_id=callback.from_user.id,
-        service_type=data.get('service_type', 'Неизвестная услуга'),
-        order_data=data,
-        files_info=data.get('files_info', []),
-        comment=data.get('comment')
-    )
-    success = await send_order_to_manager(callback.bot, order_message)
-    
-    # Убираем старую ReplyKeyboard, затем отправляем пользователю сводку и финальное сообщение с inline-меню
     await callback.answer()
-    await callback.message.answer("Клавиатура скрыта.", reply_markup=ReplyKeyboardRemove())
-    await callback.message.answer("Вот ваш заказ (копия):")
-    await callback.message.answer(order_message)
-    
-    if success:
-        await callback.message.edit_text(
-            "✅ Ваш заказ успешно отправлен менеджеру!\nС вами свяжутся в ближайшее время для уточнения деталей.",
-            reply_markup=get_main_menu_keyboard()
-        )
-    else:
-        await callback.message.edit_text(
-            "❌ Произошла ошибка при отправке заказа. Пожалуйста, попробуйте позже.",
-            reply_markup=get_main_menu_keyboard()
-        )
-    await state.clear()
+    await callback.message.edit_text(
+        "Введите количество экземпляров (только цифры):"
+    )
